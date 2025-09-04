@@ -34,16 +34,17 @@ def listen_messages(sock, listen_queue):
         except Exception as e:
             return e
 
-def find_peers(sock, room, peers_in_room, bootstraps):
+def handle_peers(sock, room, peers_in_room, bootstraps):
     while True:
-        peers = peers_in_room.get(room, [])
-        if peers:
-            return
-        try:
+        if peers_in_room:  # Ahora será [] (falsy) o [peer1, peer2] (truthy)
+            # si hay peers_in_room mandar ping a todos los peer
+            for peer in peers_in_room:
+                send_message(sock, {'type': 'ping'}, peer)
+        else:
+            # de lo contrario mandar join_bootstrap hasta que haya peers_in_room  
             send_message(sock, {'type': 'join_bootstrap', 'room': room}, bootstraps[0])
-        except Exception:
-            pass
-        time.sleep(1)
+        
+        time.sleep(10)
 
 # ____________________________________________________________________________________________________________
 class Dayanara:
@@ -57,8 +58,8 @@ class Dayanara:
         
     # --- PARA CUANDO ACTÚA COMO CLIENTE ---
         self.bootstraps = [['127.0.0.1', 5000]] # lista de boostraps publicos activos
-        self.peers_in_room = {}
-        self.own_public_addr = {}
+        self.peers_in_room = []
+        self.own_public_addr = []
         self.sock = create_udp_socket(ip, port)
         
     # ------ METHODS ----- #
@@ -83,7 +84,7 @@ class Dayanara:
         listener = threading.Thread(target=listen_messages,args=(self.sock,self.listen_queue), daemon=True)
         listener.start()
         # reintentos básicos de join_bootstrap en segundo plano
-        retry_thread = threading.Thread(target=find_peers, args=(self.sock ,room, self.peers_in_room, self.bootstraps), daemon=True)
+        retry_thread = threading.Thread(target=handle_peers, args=(self.sock ,room, self.peers_in_room, self.bootstraps), daemon=True)
         retry_thread.start()
 
         self.handle_messages()
@@ -94,31 +95,35 @@ class Dayanara:
             message, addr = self.listen_queue.get()
             print('mensaje recibido', message)
 
-            # si el boostrap recibe join_boostrap responde si existe o no la sala
+#-------------------------------------HOST--------------------------------------------#
             if message.get('type') == 'join_bootstrap':
                 peer_room = message.get('room')
 
-                # si no no existe la sala manda false y agrega sala a room_list
                 if peer_room not in self.room_list:
+                    # Primera vez que alguien se une a esta room
                     self.room_list[peer_room] = [addr]
-                    message_data = {'type': 'bootstrap_response', 'room': peer_room, 'exist': False, 'peers': [], 'public_addr': addr}
-                    
-                # si existe la sala pasa la lista con los peer
+                    message_data = {'type': 'bootstrap_response', 'room': peer_room, 'peers': [], 'public_addr': addr}
                 else:
-                    other_peers = [p for p in self.room_list[peer_room] if p != addr]
+                    # Ya existe la room
+                    other_peers = [p for p in self.room_list[peer_room] if p != addr]  # Sin el que se está uniendo
+                    
+                    # Agregar el nuevo peer a la lista completa del bootstrap
                     if addr not in self.room_list[peer_room]:
                         self.room_list[peer_room].append(addr)
-                        message_data = {'type': 'bootstrap_response', 'room': peer_room, 'exist': True, 'peers': other_peers, 'public_addr': addr}
+                    
+                    # Enviar solo los "otros peers" al que se está uniendo
+                    message_data = {'type': 'bootstrap_response', 'room': peer_room, 'peers': other_peers, 'public_addr': addr}
 
                 send_message(self.sock, message_data, addr)
 
-            # si el peer recibe la respuesta del bootstrap:
+#-------------------------------------JOIN--------------------------------------------#
             elif message.get('type') == 'bootstrap_response':
                 room = message.get('room')
-                # si la sala a la que intentamos unirnos esta vacia
                 if room is not None:
-                    self.peers_in_room[room] = message.get('peers', [])
-                    self.own_public_addr[room] = message.get('public_addr', [])
+                    # En lugar de: self.peers_in_room = message.get('peers', [])
+                    self.peers_in_room.clear()  # Limpiar la lista existente
+                    self.peers_in_room.extend(message.get('peers'))  # Agregar los nuevos peers
+                    self.own_public_addr = message.get('public_addr')
 
             elif message.get('type') == 'clean_room':
                 continue
@@ -126,8 +131,8 @@ class Dayanara:
             elif message.get('type') == 'join_room':
                 continue
 
-            elif message.get('type') == 'keep_alive':
-                send_message(self.sock, {'type': 'pong'}, addr)
+            elif message.get('type') == 'ping':
+                print('ping recibido de ' ,addr)
 
             elif message.get('type') == 'peer_response':
                 continue
