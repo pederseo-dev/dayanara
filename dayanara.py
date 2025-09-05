@@ -44,7 +44,7 @@ def handle_peers(sock, room, peers_in_room, bootstraps):
             # de lo contrario mandar join_bootstrap hasta que haya peers_in_room  
             send_message(sock, {'type': 'join_bootstrap', 'room': room}, bootstraps[0])
         
-        time.sleep(10)
+        time.sleep(5)
 
 # ____________________________________________________________________________________________________________
 class Dayanara:
@@ -132,7 +132,12 @@ class Dayanara:
                 continue
 
             elif message.get('type') == 'ping':
-                print('ping recibido de ' ,addr)
+                print('ping recibido de', addr)
+                
+                # NUEVO: Verificar si el peer que envía ping está registrado
+                if addr not in self.peers_in_room:
+                    print(f'Peer desconocido {addr} se agregó automáticamente')
+                    self.peers_in_room.append(addr)
 
             elif message.get('type') == 'peer_response':
                 continue
