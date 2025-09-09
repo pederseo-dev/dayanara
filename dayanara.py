@@ -142,31 +142,15 @@ class Dayanara:
             elif message.get('type') == 'peer_response':
                 continue
 
-            
+# serializar mensajes antes de enviar
+# para que la funcion solo mande bytes            
+# ver si es necesario mandar room:peer_room
+# modificar funciones send y receiv para manejar datos crudos
 
 
+# def send_message(sock, message, address):
+#     sock.sendto(message, (address[0],address[1]))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # def send(self, message):
-
-    #     if not self.sock:
-    #         raise RuntimeError("Socket no inicializado. Llama a join() primero.")
-    #     for addresses in self.peers_in_room.values():
-    #         for address in addresses:
-    #             send_message(self.sock, message, tuple(address))
-
-    # def receive(self):
-    #     message = receive_message(self.sock)
-    #     return message
+# def receive_message(sock):
+#     data, address = sock.recvfrom(1024)
+#     return data, address
