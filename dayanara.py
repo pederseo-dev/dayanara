@@ -8,7 +8,7 @@ from olaf import Olaf
 PING = 0
 JOIN_B = 1
 BOOTSTRAP_R = 2
-PEER_R = 3
+APP_R = 3
 
 # (msg_type=1, self_addr=["127.0.0.1", 12345], peers_addr=[["127.0.0.2", 23456], ["192.168.0.5", 34567]], payload="hola mundo")
 def create_udp_socket(ip, port):
@@ -16,28 +16,25 @@ def create_udp_socket(ip, port):
     sock.bind((ip, port))
     return sock
 
-# def send_message(sock, message, address):
-#     if isinstance(address, list): # convertir lista a tupla para el socket UDP
-#         address = tuple(address)
-#     data = json.dumps(message).encode() # convertir a binario
-#     sock.sendto(data, address)
-
-
-# def receive_message(sock):
-#     data, address = sock.recvfrom(1024)
-#     message = json.loads(data.decode()) # convertir a texto
-#     return message, list(address) # convertir a lista para usar mismo formato
-
-def listen_messages(sock, listen_queue):
+def listen_messages(sock, listen_queue, app_queue):
     while True:
         try:
             data, address = sock.recvfrom(1024)
             message = Olaf.decode_msg(data)
-            listen_queue.put((message, list(address)))
+            addr = list(address)
+            
+            # Filtrar por tipo de mensaje
+            if message[0] == APP_R:
+                # Mensajes de aplicación van a app_queue
+                app_queue.put((message[3], addr))  # payload + dirección
+            else:
+                # Mensajes de protocolo van a listen_queue
+                listen_queue.put((message, addr))
+                
             print(message)
                 
         except Exception as e:
-            continue
+            print(e)
 
 def handle_peers(sock, room, peers_in_room, bootstraps):
     while True:
@@ -60,7 +57,7 @@ class Dayanara:
         self.timeout = timeout # no se usa aun
         self.size = size # tamano de la lista (no se usa aun)
         self.listen_queue = queue.Queue()
-        self.app_queue = queue.Queue()
+        self.app_queue = queue.Queue() # no se usa aun
         
     # --- PARA CUANDO ACTÚA COMO CLIENTE ---
         self.bootstraps = [['127.0.0.1', 5000]] # lista de boostraps publicos activos
@@ -73,7 +70,7 @@ class Dayanara:
         ''' Metodo que maneja los join peers que quieren conectarse a una sala'''
         # hilo que escucha y guarda en cola todos los mensaje esntrantes
         print('escuchando peers')
-        listener = threading.Thread(target=listen_messages,args=(self.sock,self.listen_queue), daemon=True)
+        listener = threading.Thread(target=listen_messages,args=(self.sock,self.listen_queue, self.app_queue), daemon=True)
         listener.start()
         
         # si bootstrap responde exist
@@ -87,7 +84,7 @@ class Dayanara:
 
         # hilo que escucha y guarda en cola todos los mensaje esntrantes
         print('esperando mensajes entrantes')
-        listener = threading.Thread(target=listen_messages,args=(self.sock,self.listen_queue), daemon=True)
+        listener = threading.Thread(target=listen_messages,args=(self.sock,self.listen_queue,self.app_queue), daemon=True)
         listener.start()
         # reintentos básicos de join_bootstrap en segundo plano
         retry_thread = threading.Thread(target=handle_peers, args=(self.sock ,room, self.peers_in_room, self.bootstraps), daemon=True)
@@ -95,11 +92,23 @@ class Dayanara:
 
         self.handle_messages()
 
+    def send(self, data):
+        ''' Metodo para enviar data a todos los peers'''
+        for peer in self.peers_in_room:
+            message = Olaf.encode_msg(APP_R, ["0.0.0.0", 0], [], data)
+            self.sock.sendto(message, tuple(peer))
+    
+    def receive(self):
+        data = self.app_queue.get()
+        return data
+
     def handle_messages(self):
         while True:
             # extraer mensajes de la cola
             message, addr = self.listen_queue.get()
             print('mensaje recibido', message)
+
+    
 
 #-------------------------------------HOST--------------------------------------------#
             if message[0] == JOIN_B:
@@ -109,15 +118,15 @@ class Dayanara:
                     # Primera vez que alguien se une a esta room
                     self.room_list[peer_room] = [addr]
                     message_data = Olaf.encode_msg(BOOTSTRAP_R, addr, [], peer_room)
-                    
+
                 else:
                     # Ya existe la room
                     other_peers = [p for p in self.room_list[peer_room] if p != addr]  # Sin el que se está uniendo
-                    
+
                     # Agregar el nuevo peer a la lista completa del bootstrap
                     if addr not in self.room_list[peer_room]:
                         self.room_list[peer_room].append(addr)
-                    
+
                     # Enviar solo los "otros peers" al que se está uniendo
                     message_data = Olaf.encode_msg(BOOTSTRAP_R, addr, other_peers, peer_room)
 
@@ -132,14 +141,8 @@ class Dayanara:
                     self.peers_in_room.extend(message[2])  # Agregar los nuevos peers
                     self.own_public_addr = message[1]
 
-            elif message[0] == PING:
-                print('ping recibido de', addr)
-                
+            elif message[0] == PING:  
                 # NUEVO: Verificar si el peer que envía ping está registrado
                 if addr not in self.peers_in_room:
                     print(f'Peer desconocido {addr} se agregó automáticamente')
                     self.peers_in_room.append(addr)
-
-            elif message[0] == PEER_R:
-
-                continue
