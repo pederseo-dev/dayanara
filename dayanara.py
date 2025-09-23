@@ -31,24 +31,12 @@ def listen_messages(sock, listen_queue, app_queue):
                 # Mensajes de protocolo van a listen_queue
                 listen_queue.put((message, addr))
                 
-            print(message)
+            # print(message)  # Comentado para no mostrar mensajes de protocolo
                 
         except Exception as e:
             print(e)
 
-def handle_peers(sock, room, peers_in_room, bootstraps):
-    while True:
-        if peers_in_room:  # Ahora será [] (falsy) o [peer1, peer2] (truthy)
-            # si hay peers_in_room mandar ping a todos los peer
-            for peer in peers_in_room:
-                message = Olaf.encode_msg(PING, ["0.0.0.0", 0], [], '')
-                sock.sendto(message, tuple(peer))
-        else:
-            # de lo contrario mandar join_bootstrap hasta que haya peers_in_room
-            message = Olaf.encode_msg(JOIN_B, ["0.0.0.0", 0], [], room)
-            sock.sendto(message, tuple(bootstraps[0]))
-        
-        time.sleep(5)
+
 
 class Dayanara:
     def __init__(self, timeout=5, size=10, ip='', port=0):
@@ -62,19 +50,19 @@ class Dayanara:
     # --- PARA CUANDO ACTÚA COMO CLIENTE ---
         self.bootstraps = [['127.0.0.1', 5000]] # lista de boostraps publicos activos
         self.peers_in_room = []
-        self.own_public_addr = []
+        self.self_addr =  ['0.0.0.0', 0]
         self.sock = create_udp_socket(ip, port)
         
     # ------ METHODS ----- #
     def host(self):
         ''' Metodo que maneja los join peers que quieren conectarse a una sala'''
         # hilo que escucha y guarda en cola todos los mensaje esntrantes
-        print('escuchando peers')
         listener = threading.Thread(target=listen_messages,args=(self.sock,self.listen_queue, self.app_queue), daemon=True)
         listener.start()
         
-        # si bootstrap responde exist
-        self.handle_messages()
+        # hilo para manejar mensajes de protocolo
+        handler_thread = threading.Thread(target=self.handle_messages, daemon=True)
+        handler_thread.start()
 
     
     def join(self, room):
@@ -83,33 +71,56 @@ class Dayanara:
             print('error')
 
         # hilo que escucha y guarda en cola todos los mensaje esntrantes
-        print('esperando mensajes entrantes')
         listener = threading.Thread(target=listen_messages,args=(self.sock,self.listen_queue,self.app_queue), daemon=True)
         listener.start()
         # reintentos básicos de join_bootstrap en segundo plano
-        retry_thread = threading.Thread(target=handle_peers, args=(self.sock ,room, self.peers_in_room, self.bootstraps), daemon=True)
+        retry_thread = threading.Thread(target=self.handle_peers, args=(room,), daemon=True)
         retry_thread.start()
+        # hilo para manejar mensajes de protocolo
+        handler_thread = threading.Thread(target=self.handle_messages, daemon=True)
+        handler_thread.start()
 
-        self.handle_messages()
 
     def send(self, data):
         ''' Metodo para enviar data a todos los peers'''
+        if not data:
+            print('error')
+            
         for peer in self.peers_in_room:
-            message = Olaf.encode_msg(APP_R, ["0.0.0.0", 0], [], data)
+            message = Olaf.encode_msg(APP_R, self.self_addr, [], data)
             self.sock.sendto(message, tuple(peer))
     
     def receive(self):
-        data = self.app_queue.get()
-        return data
+        try:
+            data = self.app_queue.get_nowait()
+            return data
+        except queue.Empty:
+            return None
+
+    def handle_peers(self, room):
+        while True:
+            # Filtrar mi propia dirección de la lista
+            other_peers = [peer for peer in self.peers_in_room if peer != self.self_addr]
+            
+            if other_peers:
+                # Si hay otros peers, enviar PING solo a ellos (ya no al bootstrap)
+                for peer in other_peers:
+                    message = Olaf.encode_msg(PING, self.self_addr, self.peers_in_room, '')
+                    self.sock.sendto(message, tuple(peer))
+            else:
+                # Solo cuando NO hay otros peers, enviar JOIN_B al bootstrap
+                message = Olaf.encode_msg(JOIN_B, self.self_addr, self.peers_in_room, room)
+                self.sock.sendto(message, tuple(self.bootstraps[0]))
+            
+            time.sleep(5)
 
     def handle_messages(self):
         while True:
             # extraer mensajes de la cola
             message, addr = self.listen_queue.get()
-            print('mensaje recibido', message)
+            # msg[0]=comand, msg[1]=self_peer, msg[2]=peers_in_room, msg[3]=pyload
 
     
-
 #-------------------------------------HOST--------------------------------------------#
             if message[0] == JOIN_B:
                 peer_room = message[3]
@@ -134,15 +145,19 @@ class Dayanara:
 
 #-------------------------------------JOIN--------------------------------------------#
             elif message[0] == BOOTSTRAP_R:
-                room = message[3]
-                if room is not None:
-                    # En lugar de: self.peers_in_room = message.get('peers', [])
-                    self.peers_in_room.clear()  # Limpiar la lista existente
-                    self.peers_in_room.extend(message[2])  # Agregar los nuevos peers
-                    self.own_public_addr = message[1]
+                
+                if message[3] is not None:
+                    # Actualizar mi dirección con la que me asignó el bootstrap
+                    self.self_addr = message[1]
+                    
+                    # Actualizar lista de peers (excluyendo mi dirección)
+                    self.peers_in_room.clear()
+                    self.peers_in_room.extend(message[2])
 
             elif message[0] == PING:  
                 # NUEVO: Verificar si el peer que envía ping está registrado
                 if addr not in self.peers_in_room:
-                    print(f'Peer desconocido {addr} se agregó automáticamente')
                     self.peers_in_room.append(addr)
+
+
+
