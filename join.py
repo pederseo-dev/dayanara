@@ -12,7 +12,7 @@ def escuchar_mensajes():
         try:
             data = peer1.receive()
             if data is not None:
-                print(f"[RECIBIDO] {data}")
+                print(f"[RECIBIDO] {data[0]}")
 
         except Exception as e:
             # Solo mostrar errores importantes, no errores de conexión

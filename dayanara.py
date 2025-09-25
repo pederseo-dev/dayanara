@@ -3,12 +3,8 @@ import queue
 import threading
 import time
 from olaf import Olaf
-
+from config import *
 # luego estara en otro archivo
-PING = 0
-JOIN_B = 1
-BOOTSTRAP_R = 2
-APP_R = 3
 
 # (msg_type=1, self_addr=["127.0.0.1", 12345], peers_addr=[["127.0.0.2", 23456], ["192.168.0.5", 34567]], payload="hola mundo")
 def create_udp_socket(ip, port):
@@ -35,7 +31,6 @@ def listen_messages(sock, listen_queue, app_queue):
                 
         except Exception as e:
             print(e)
-
 
 
 class Dayanara:
@@ -74,7 +69,7 @@ class Dayanara:
         listener = threading.Thread(target=listen_messages,args=(self.sock,self.listen_queue,self.app_queue), daemon=True)
         listener.start()
         # reintentos básicos de join_bootstrap en segundo plano
-        retry_thread = threading.Thread(target=self.handle_peers, args=(room,), daemon=True)
+        retry_thread = threading.Thread(target=self.handle_connection, args=(room,), daemon=True)
         retry_thread.start()
         # hilo para manejar mensajes de protocolo
         handler_thread = threading.Thread(target=self.handle_messages, daemon=True)
@@ -97,7 +92,7 @@ class Dayanara:
         except queue.Empty:
             return None
 
-    def handle_peers(self, room):
+    def handle_connection(self, room):
         while True:
             # Filtrar mi propia dirección de la lista
             other_peers = [peer for peer in self.peers_in_room if peer != self.self_addr]
@@ -120,7 +115,6 @@ class Dayanara:
             message, addr = self.listen_queue.get()
             # msg[0]=comand, msg[1]=self_peer, msg[2]=peers_in_room, msg[3]=pyload
 
-    
 #-------------------------------------HOST--------------------------------------------#
             if message[0] == JOIN_B:
                 peer_room = message[3]

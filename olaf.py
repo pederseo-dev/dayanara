@@ -13,13 +13,15 @@ class Olaf:
     """
     @staticmethod
     def pack_addr(addr) -> bytes:
-        ip, port = addr
+        ip, port = addr or ['0.0.0.0', 0]
         return struct.pack("!4sH", socket.inet_aton(ip), int(port))  # 6B
+
     @staticmethod
     def pack_peers(peers_addr) -> bytes:
         peers = peers_addr or []
         body = b"".join(Olaf.pack_addr(peer) for peer in peers)
         return struct.pack("!H", len(peers)) + body  # [num_peers][peers...]
+
     @staticmethod
     def pack_payload(payload) -> bytes:
         if isinstance(payload, str):
