@@ -12,12 +12,10 @@ def escuchar_mensajes():
         try:
             data = peer1.receive()
             if data is not None:
-                print(f"[RECIBIDO] {data[0]}")
+                print(data[3])
 
         except Exception as e:
-            # Solo mostrar errores importantes, no errores de conexión
-            if "10054" not in str(e):
-                print(f"[ERROR RECIBIENDO] {e}")
+            return e
         
         time.sleep(0.1)  # Pequeña pausa para no saturar CPU
 
@@ -30,20 +28,9 @@ def escribir_mensajes():
         except KeyboardInterrupt:
             break
         except Exception as e:
-            print(f"Error enviando mensaje: {e}")
+           return e
 
 # Crear hilos
 escuchar_thread = threading.Thread(target=escuchar_mensajes, daemon=True)
-escribir_thread = threading.Thread(target=escribir_mensajes, daemon=True)
-
-# Iniciar hilos
-escuchar_thread.start()
-escribir_thread.start()
-
-try:
-    # Mantener el programa corriendo
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    print("\nSaliendo del chat...")
+escribir_mensajes()
 
