@@ -12,19 +12,15 @@ def create_udp_socket(ip, port):
     sock.bind((ip, port))
     return sock
 
-
 class Dayanara:
     def __init__(self, timeout=5, size=100, ip='0.0.0.0', port=0):
     # --- PARA CUANDO ACTÚA COMO HOST ---
-        self.listen_queue = queue.Queue()
+        self.is_entry_peer = False
         self.app_queue = queue.Queue()
-        
-    # --- PARA CUANDO ACTÚA COMO CLIENTE ---
         self.bootstraps = [['127.0.0.1', 5000],['127.0.0.1', 5001]] # lista de boostraps publicos activos
         self.peers_in_room = []
         self.self_addr =  [ip, port]
         self.sock = create_udp_socket(ip, port)
-
     
     def join(self, room):
         ''' Metodo para crear peer y conecatrse a una sala'''
@@ -37,7 +33,6 @@ class Dayanara:
         # reintentos básicos de join_bootstrap en segundo plano
         retry_thread = threading.Thread(target=self.handle_connection, args=(room,), daemon=True)
         retry_thread.start()
-
 
     def send(self, data):
         ''' Metodo para enviar data a todos los peers'''
@@ -58,16 +53,21 @@ class Dayanara:
 
     def handle_connection(self, room):
         while True:
-            # Filtrar mi propia dirección de la lista
             other_peers = [peer for peer in self.peers_in_room if peer != self.self_addr]
             
             if other_peers:
-                # Si hay otros peers, enviar PING solo a ellos (ya no al bootstrap)
+                # Hay otros peers, enviar PING solo a ellos (ya no al bootstrap)
                 for peer in other_peers:
                     message = Olaf.encode_msg(PING, self.self_addr, self.peers_in_room, '')
                     self.sock.sendto(message, tuple(peer))
+            
+            elif self.is_entry_peer:
+                # Peer de entrada solo: mantener keep-alive con bootstrap
+                message = Olaf.encode_msg(ENTRY_PEER, [], [], room)
+                self.sock.sendto(message, tuple(self.bootstraps[0]))
+            
             else:
-                # Solo cuando NO hay otros peers, enviar JOIN_B al bootstrap
+                # Peer normal solo: enviar JOIN_B al bootstrap
                 message = Olaf.encode_msg(JOIN_B, self.self_addr, self.peers_in_room, room)
                 self.sock.sendto(message, tuple(self.bootstraps[0]))
             
@@ -86,7 +86,6 @@ class Dayanara:
                     self.app_queue.put((message, addr))  # payload + dirección
 
                 elif message[0] == BOOTSTRAP_R:
-                    
                     if message[3] is not None:
                         # Actualizar mi dirección con la que me asignó el bootstrap
                         self.self_addr = message[1]
@@ -94,6 +93,12 @@ class Dayanara:
                         # Actualizar lista de peers (excluyendo mi dirección)
                         self.peers_in_room.clear()
                         self.peers_in_room.extend(message[2])
+                        
+                        # Si me envío a mí mismo, soy el peer de entrada
+                        if message[2] == [self.self_addr]:
+                            self.is_entry_peer = True
+                        else:
+                            self.is_entry_peer = False
                     
                 elif message[0] == ROOM_FULL:
                     # logica para cambiar de bootstrap si la sala esta llena
