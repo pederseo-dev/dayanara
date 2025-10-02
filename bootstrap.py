@@ -1,4 +1,5 @@
 import socket
+from turtle import pu
 from olaf import Olaf
 from config import *
 # luego estara en otro archivo
@@ -22,46 +23,58 @@ class Bootstrap:
     def start(self):
         ''' Metodo que maneja los join peers que quieren conectarse a una sala'''
         # hilo para manejar mensajes de protocolo
-        print('iniciando bootstrap')
-
         while True:
-            # extraer mensajes de la cola
-            data, publi_addr = self.sock.recvfrom(1024)
-            message = Olaf.decode_msg(data)
-            publi_addr = list(publi_addr)
-            room_name = message[3]
+            try:
+                # extraer mensajes de la cola
+                data, publi_addr = self.sock.recvfrom(1024)
+                message = Olaf.decode_msg(data)
+                publi_addr = list(publi_addr)
 
-            print(message, publi_addr)
-            # msg[0]=comand, msg[1]=self_peer, msg[2]=peers_in_room, msg[3]=pyload
+                # peer data
+                msg_type, self_addr, peers, payload = message
 
-            if message[0] == JOIN_B:
+                print(message, publi_addr)
+                # msg[0]=comand, msg[1]=self_peer, msg[2]=peers_in_room, msg[3]=pyload
 
-                if room_name not in self.room_list:
-                    # Verificar límite de salas antes de crear nueva
-                    if len(self.room_list) >= self.room_size:
-                        # Límite alcanzado, rechazar
-                        error_msg = Olaf.encode_msg(ROOM_FULL, publi_addr, [], "")
-                        self.sock.sendto(error_msg, (publi_addr[0], publi_addr[1]))
-                        print(f"Rechazado peer {publi_addr} - límite de salas alcanzado")
-                    else:
-                        # se crea la room con el peer que se une
-                        self.room_list[room_name] = publi_addr
-                        message_data = Olaf.encode_msg(BOOTSTRAP_R, publi_addr, [self.room_list[room_name]], room_name)
-                        self.sock.sendto(message_data, (publi_addr[0],publi_addr[1]))
-                        print(f"Nueva sala '{room_name}' creada por {publi_addr}")
+                if msg_type == JOIN_B:
+                    if payload not in self.room_list:
+                        # Verificar límite de salas antes de crear nueva
+                        if len(self.room_list) >= self.room_size:
+                            # Límite alcanzado, rechazar
+                            error_msg = Olaf.encode_msg(ROOM_FULL, publi_addr, [], "")
+                            self.sock.sendto(error_msg, (publi_addr[0], publi_addr[1]))
+                            print(f"Rechazado peer {publi_addr} - límite de salas alcanzado")
+                            
+                        else:
+                            # Primera vez: este peer es el entry (ID 1)
+                            ip_port_id = [publi_addr[0], publi_addr[1], 1]
+                            self.room_list[payload] = {"entry": ip_port_id, "next_id": 2}
+                            message_data = Olaf.encode_msg(BOOTSTRAP_R, ip_port_id, [ip_port_id], payload)
+                            self.sock.sendto(message_data, (publi_addr[0], publi_addr[1]))
+                            print(f"Nueva sala '{payload}' creada por {publi_addr} (ID 1)")
 
-                # si la room existe
+                    else: # Sala existe: asignar nuevo ID y enviar entry actual
+                        room_data = self.room_list[payload]
+                        entry_peer = room_data["entry"]
+                        new_id = room_data["next_id"]
+                        
+                        # Actualizar contador
+                        room_data["next_id"] += 1
+                        
+                        # Crear dirección del nuevo peer
+                        publi_addr_id = [publi_addr[0], publi_addr[1], new_id]
+                        
+                        message_data = Olaf.encode_msg(BOOTSTRAP_R, publi_addr_id, [entry_peer], payload)
+                        self.sock.sendto(message_data, (publi_addr[0], publi_addr[1]))
+
+                elif msg_type == ENTRY_PEER:
+                    #reemplazar el peer de entrada
+                    room_data = self.room_list[payload]
+                    room_data["entry"] = [publi_addr[0], publi_addr[1], self_addr[2]]
+                    print(f"Peer {publi_addr} reemplazado como entrada en sala '{message[3]}'")
+                    
                 else:
-                    # Enviar al peer de entrada
-                    entry_peer = self.room_list[room_name]
-                    message_data = Olaf.encode_msg(BOOTSTRAP_R, publi_addr, [entry_peer], room_name)
-                    self.sock.sendto(message_data, (publi_addr[0],publi_addr[1]))
-                    print(f"Peer {publi_addr} dirigido a entrada {entry_peer} en sala '{room_name}'")
-            elif message[0] == ENTRY_PEER:
-                #reemplazar el peer de entrada
-                self.room_list[room_name] = publi_addr
-                print(f"Peer {publi_addr} reemplazado como entrada en sala '{message[3]}'")
-            else:
-                continue
-
-
+                    continue
+                
+            except KeyboardInterrupt:
+                break

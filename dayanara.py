@@ -15,7 +15,7 @@ def create_udp_socket(ip, port):
 class Dayanara:
     def __init__(self, timeout=5, size=100, ip='0.0.0.0', port=0):
     # --- PARA CUANDO ACTÚA COMO HOST ---
-        self.is_entry_peer = False
+        self.peer_info = {"entry": False, "id": 0}
         self.app_queue = queue.Queue()
         self.bootstraps = [['127.0.0.1', 5000],['127.0.0.1', 5001]] # lista de boostraps publicos activos
         self.peers_in_room = []
@@ -38,14 +38,15 @@ class Dayanara:
         ''' Metodo para enviar data a todos los peers'''
         if not data:
             print('error')
-            
-        for peer in self.peers_in_room:
+        other_peers = [peer for peer in self.peers_in_room if peer != self.self_addr]
+        for peer in other_peers:
             message = Olaf.encode_msg(APP_R, self.self_addr, [], data)
             self.sock.sendto(message, tuple(peer))
     
     def receive(self):
         try:
             data = self.app_queue.get_nowait()
+            print(data)
             message, addr = data  # Desempaquetar la tupla
             return message    # Acceder al payload del mensaje
         except queue.Empty:
@@ -61,10 +62,10 @@ class Dayanara:
                     message = Olaf.encode_msg(PING, self.self_addr, self.peers_in_room, '')
                     self.sock.sendto(message, tuple(peer))
             
-            elif self.is_entry_peer:
-                # Peer de entrada solo: mantener keep-alive con bootstrap
-                message = Olaf.encode_msg(ENTRY_PEER, [], [], room)
-                self.sock.sendto(message, tuple(self.bootstraps[0]))
+                if self.is_entry_peer:
+                    # Peer de entrada solo: mantener keep-alive con bootstrap
+                    message = Olaf.encode_msg(ENTRY_PEER, [], [], room)
+                    self.sock.sendto(message, tuple(self.bootstraps[0]))
             
             else:
                 # Peer normal solo: enviar JOIN_B al bootstrap
@@ -78,33 +79,38 @@ class Dayanara:
             try:
                 data, address = self.sock.recvfrom(1024)
                 message = Olaf.decode_msg(data)
+
+                msg_type, self_addr, peers, payload = message
+                
                 addr = list(address)
                 
                 # Filtrar por tipo de mensaje
-                if message[0] == APP_R:
+                if msg_type == APP_R:
                     # Mensajes de aplicación van a app_queue
                     self.app_queue.put((message, addr))  # payload + dirección
+                    print('mensaje cargado a cola')
 
-                elif message[0] == BOOTSTRAP_R:
-                    if message[3] is not None:
+                elif msg_type == BOOTSTRAP_R:
+                    if payload is not None:
                         # Actualizar mi dirección con la que me asignó el bootstrap
                         self.self_addr = message[1]
                         
                         # Actualizar lista de peers (excluyendo mi dirección)
                         self.peers_in_room.clear()
-                        self.peers_in_room.extend(message[2])
+                        self.peers_in_room.extend(peers)
                         
-                        # Si me envío a mí mismo, soy el peer de entrada
+                        # 
                         if message[2] == [self.self_addr]:
+                            
                             self.is_entry_peer = True
                         else:
                             self.is_entry_peer = False
                     
-                elif message[0] == ROOM_FULL:
+                elif msg_type == ROOM_FULL:
                     # logica para cambiar de bootstrap si la sala esta llena
                     continue
 
-                elif message[0] == PING:  
+                elif msg_type == PING:  
                     # NUEVO: Verificar si el peer que envía ping está registrado
                     if addr not in self.peers_in_room:
                         self.peers_in_room.append(addr)
@@ -118,7 +124,3 @@ class Dayanara:
                 pass
 
             
-
-
-
-

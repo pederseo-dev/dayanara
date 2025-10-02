@@ -32,5 +32,6 @@ def escribir_mensajes():
 
 # Crear hilos
 escuchar_thread = threading.Thread(target=escuchar_mensajes, daemon=True)
+escuchar_thread.start()
 escribir_mensajes()
 

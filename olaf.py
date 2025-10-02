@@ -4,17 +4,17 @@ import socket
 class Olaf:
     """
     Protocolo Olaf (orden de bytes):
-    [type (1B)] [self_addr (IPv4 4B + port 2B)] [peers (num_peers 2B + N*peer)] [payload (len 4B + data)]
-    peer = [IPv4 (4B) + port (2B)]
+    [type (1B)] [self_addr (IPv4 4B + port 2B + id 2B)] [peers (num_peers 2B + N*peer)] [payload (len 4B + data)]
+    peer = [IPv4 (4B) + port (2B) + id (2B)]
 
     Convención de direcciones en esta API: listas
-    - self_addr: [ip:str, port:int]
-    - peers_addr: [[ip:str, port:int], ...]
+    - self_addr: [ip:str, port:int, id:int]
+    - peers_addr: [[ip:str, port:int, id:int], ...]
     """
     @staticmethod
     def pack_addr(addr) -> bytes:
-        ip, port = addr or ['0.0.0.0', 0]
-        return struct.pack("!4sH", socket.inet_aton(ip), int(port))  # 6B
+        ip, port, peer_id = addr or ['0.0.0.0', 0, 0]
+        return struct.pack("!4sHH", socket.inet_aton(ip), int(port), int(peer_id))  # 8B
 
     @staticmethod
     def pack_peers(peers_addr) -> bytes:
@@ -32,7 +32,8 @@ class Olaf:
     def unpack_addr(data: bytes, offset: int):
         ip = socket.inet_ntoa(data[offset:offset+4])
         port = struct.unpack_from("!H", data, offset+4)[0]
-        return [ip, port], offset + 6
+        peer_id = struct.unpack_from("!H", data, offset+6)[0]
+        return [ip, port, peer_id], offset + 8
 
     @staticmethod
     def unpack_peers(data: bytes, offset: int):
@@ -54,16 +55,11 @@ class Olaf:
     @staticmethod
     def encode_msg(msg_type: int, self_addr: list, peers_addr: list, payload: bytes | str = b"") -> bytes:
         """
-        Empaqueta un mensaje binario Olaf.
-
         Inputs:
         - msg_type: int
-        - self_addr: ["127.0.0.1", 12345]
-        - peers_addr: [["127.0.0.1", 12346], ["127.0.0.2", 12347]]
+        - self_addr: ["127.0.0.1", 12345, 1]
+        - peers_addr: [["127.0.0.1", 12346, 2], ["127.0.0.2", 12347, 3]]
         - payload: bytes o str (si es str se codifica utf-8)
-
-        Output:
-        - bytes con estructura [type][self_addr][peers][payload]
         """
         # [type][self_addr][peers][payload]
         type_block = struct.pack("!B", int(msg_type))                   # [type] (1B)
@@ -75,15 +71,10 @@ class Olaf:
     @staticmethod
     def decode_msg(data: bytes):
         """
-        Decodifica bytes a componentes Olaf.
-
-        Input:
-        - data: bytes
-
         Output (listas):
         - msg_type: int
-        - self_addr: ["127.0.0.1", 12345]
-        - peers: [["127.0.0.1", 12346], ["127.0.0.2", 12347]]
+        - self_addr: ["127.0.0.1", 12345, 1]
+        - peers: [["127.0.0.1", 12346, 2], ["127.0.0.2", 12347, 3]]
         - payload: bytes
         """
         msg_type = struct.unpack_from("!B", data, 0)[0]
@@ -93,20 +84,20 @@ class Olaf:
         return msg_type, self_addr, peers, payload
 
 # ---- test Olaf ----
-# msg = Olaf.encode_msg(
-#     msg_type=1,
-#     self_addr=["127.0.0.1", 12345],
-#     peers_addr=[["127.0.0.2", 23456], ["192.168.0.5", 34567]],
-#     payload="hola mundo"
-# )
+msg = Olaf.encode_msg(
+    msg_type=1,
+    self_addr=["127.0.0.1", 12345, 1],
+    peers_addr=[["127.0.0.2", 23456, 2], ["192.168.0.5", 34567, 3]],
+    payload="hola mundo"
+)
 
-# print("Binario crudo:", msg)
-# print("Hexadecimal :", msg.hex(" "))
-# print("Longitud    :", len(msg))
+print("Binario crudo:", msg)
+print("Hexadecimal :", msg.hex(" "))
+print("Longitud    :", len(msg))
 
-# # Probar decode
-# decoded = Olaf.decode_msg(msg)
-# print("\nDecodificado:", decoded)
+# Probar decode
+decoded = Olaf.decode_msg(msg)
+print("\nDecodificado:", decoded)
 
 
 
