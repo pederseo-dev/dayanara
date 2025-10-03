@@ -83,21 +83,21 @@ class Olaf:
         payload, offset = Olaf.unpack_payload(data, offset)
         return msg_type, self_addr, peers, payload
 
-# ---- test Olaf ----
-msg = Olaf.encode_msg(
-    msg_type=1,
-    self_addr=["127.0.0.1", 12345, 1],
-    peers_addr=[["127.0.0.2", 23456, 2], ["192.168.0.5", 34567, 3]],
-    payload="hola mundo"
-)
+# # ---- test Olaf ----
+# msg = Olaf.encode_msg(
+#     msg_type=1,
+#     self_addr=[],
+#     peers_addr=[],
+#     payload="hola mundo"
+# )
 
-print("Binario crudo:", msg)
-print("Hexadecimal :", msg.hex(" "))
-print("Longitud    :", len(msg))
+# print("Binario crudo:", msg)
+# print("Hexadecimal :", msg.hex(" "))
+# print("Longitud    :", len(msg))
 
-# Probar decode
-decoded = Olaf.decode_msg(msg)
-print("\nDecodificado:", decoded)
+# # Probar decode
+# decoded = Olaf.decode_msg(msg)
+# print("\nDecodificado:", decoded)
 
 
 

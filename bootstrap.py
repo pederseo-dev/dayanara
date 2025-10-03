@@ -14,7 +14,7 @@ def create_udp_socket(ip, port):
 class Bootstrap:
     def __init__(self, timeout=5, room_size=10, ip='', port=0):
     # --- PARA CUANDO ACTÚA COMO HOST ---
-        self.room_list = {}  # {"gaming": ["192.168.1.100:5000", "10.0.0.5:6000"], "chat": ["1.2.3.4:7000"]}
+        self.room_list = {}  # {"gaming": ["192.168.1.100:5000",1], "chat": ["1.2.3.4:7000",2]}
         self.timeout = timeout # no se usa aun
         self.room_size = room_size
         self.sock = create_udp_socket(ip, port)
@@ -32,6 +32,7 @@ class Bootstrap:
 
                 # peer data
                 msg_type, self_addr, peers, payload = message
+                payload = payload.decode('utf-8')
 
                 print(message, publi_addr)
                 # msg[0]=comand, msg[1]=self_peer, msg[2]=peers_in_room, msg[3]=pyload
@@ -69,9 +70,14 @@ class Bootstrap:
 
                 elif msg_type == ENTRY_PEER:
                     #reemplazar el peer de entrada
-                    room_data = self.room_list[payload]
-                    room_data["entry"] = [publi_addr[0], publi_addr[1], self_addr[2]]
-                    print(f"Peer {publi_addr} reemplazado como entrada en sala '{message[3]}'")
+                    print(f"Recibido ENTRY_PEER de {publi_addr} para sala '{payload}'")
+                    if payload in self.room_list:
+                        room_data = self.room_list[payload]
+                        # Mantener el ID original del entry peer (no cambiar el ID)
+                        room_data["entry"] = [publi_addr[0], publi_addr[1], room_data["entry"][2]]
+                        print(f"Peer {publi_addr} reemplazado como entrada en sala '{payload}' con ID {room_data['entry'][2]}")
+                    else:
+                        print(f"ERROR: Sala '{payload}' no encontrada para ENTRY_PEER")
                     
                 else:
                     continue
