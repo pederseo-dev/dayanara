@@ -53,6 +53,7 @@ class Dayanara:
             return message, addr    # Acceder al payload del mensaje
         except queue.Empty:
             return None
+#-----------------------------------------------------------------------------------------------------#
 
     def handle_connection(self, room):
 
@@ -69,7 +70,7 @@ class Dayanara:
             # Evaluar en cada latido si soy el entry peer (ID más bajo)
             if self.peers_in_room:
                 min_id = min(peer[2] for peer in self.peers_in_room)
-                
+
                 if self.self_addr[2] == min_id:
                     message = Olaf.encode_msg(ENTRY_PEER, self.self_addr, [], room)
                     self.sock.sendto(message, tuple(self.bootstraps[0]))
@@ -95,19 +96,13 @@ class Dayanara:
                     self.app_queue.put((message, addr))  # payload + dirección
 
                 elif msg_type == BOOTSTRAP_R:
-                    print(f"Recibido BOOTSTRAP_R: self_addr={self_addr}, peers={peers}, payload={payload}")
-                    
                     # Actualizar mi dirección con la que me asignó el bootstrap
                     self.self_addr = self_addr
-                    print(f"Mi dirección actualizada: {self.self_addr}")
                     
                     # Solo agregar el entry peer si no está en la lista y no soy yo mismo
                     for peer in peers:
                         if peer not in self.peers_in_room and peer != self.self_addr:
                             self.peers_in_room.append(peer)
-                            print(f"Entry peer {peer} agregado a la lista")
-                    
-                    print(f"Lista de peers actualizada: {self.peers_in_room}")
                     
                     
                 elif msg_type == ROOM_FULL:
