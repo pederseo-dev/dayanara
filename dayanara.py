@@ -4,7 +4,8 @@ import threading
 import time
 from olaf import Olaf
 from config import *
-# luego estara en otro archivo
+import sys
+import signal
 
 # (msg_type=1, self_addr=["127.0.0.1", 12345], peers_addr=[["127.0.0.2", 23456], ["192.168.0.5", 34567]], payload="hola mundo")
 def create_udp_socket(ip, port):
@@ -17,27 +18,27 @@ class Dayanara:
     # --- PARA CUANDO ACTÚA COMO HOST ---
         self.app_queue = queue.Queue()
         self.bootstraps = [['127.0.0.1', 5000],['127.0.0.1', 5001]] # lista de boostraps publicos activos
-        self.peers_in_room = []
+        self.peers_in_room = [] 
         self.self_addr =  [ip, port, 0]
         self.sock = create_udp_socket(ip, port)
     # def detect_disconnections(self):
 
     def join(self, room):
         ''' Metodo para crear peer y conecatrse a una sala'''
-        if not room:
-            print('error')
+        if not room: print('error')
 
+        signal.signal(signal.SIGINT, self.signal_handler)
         # hilo que escucha y guarda en cola todos los mensaje esntrantes
         listener = threading.Thread(target=self.handle_input_data, daemon=True)
         listener.start()
         # reintentos básicos de join_bootstrap en segundo plano
-        retry_thread = threading.Thread(target=self.handle_connection, args=(room,), daemon=True)
+        retry_thread = threading.Thread(target=self.heart_beat, args=(room,), daemon=True)
         retry_thread.start()
+
 
     def send(self, data):
         ''' Metodo para enviar data a todos los peers'''
-        if not data:
-            print('error')
+        if not data: print('error')
         # Excluir a sí mismo comparando solo IP y puerto (ignorar ID que puede diferir)
         other_peers = [peer for peer in self.peers_in_room 
                       if peer[:2] != self.self_addr[:2]]
@@ -55,30 +56,26 @@ class Dayanara:
             return None
 #-----------------------------------------------------------------------------------------------------#
 
-    def handle_connection(self, room):
-
+    def heart_beat(self, room):
         while True:
-            other_peers = [peer for peer in self.peers_in_room 
-                          if peer[:2] != self.self_addr[:2]]
+            # Obtener otros peers
+            other_peers = [peer for peer in self.peers_in_room if peer[:2] != self.self_addr[:2]]
+
+            # Evaluar en cada latido si soy el entry peer (ID más bajo)
+            if self.peers_in_room: self.entry_validator(room)
             
             # Enviar PINGs a otros peers si existen  
-            if other_peers:
-                for peer in other_peers:
-                    message = Olaf.encode_msg(PING, self.self_addr, self.peers_in_room, '')
-                    self.sock.sendto(message, (peer[0],peer[1]))
-            
-            # Evaluar en cada latido si soy el entry peer (ID más bajo)
-            if self.peers_in_room:
-                min_id = min(peer[2] for peer in self.peers_in_room)
+            elif other_peers: self.send_ping(other_peers)
 
-                if self.self_addr[2] == min_id:
-                    message = Olaf.encode_msg(ENTRY_PEER, self.self_addr, [], room)
-                    self.sock.sendto(message, tuple(self.bootstraps[0]))
-            else:
-                # Peer normal: enviar JOIN_B solo si no hay otros peers
-                if not other_peers:
-                    message = Olaf.encode_msg(JOIN_B, [], [], room)
-                    self.sock.sendto(message, tuple(self.bootstraps[0]))
+            # Peer normal: enviar JOIN_B solo si no hay otros peers
+            elif not other_peers: self.join_bootstrap(room)
+
+            # evaluar peers activos
+            # logica para remover peers inactivos
+
+
+            # heartbeat time
+            time.sleep(0.3)
 
     def handle_input_data(self):
         while True:
@@ -133,13 +130,32 @@ class Dayanara:
             except Exception as e:
                 pass
 
-    def notify_disconnection(self):
-        """Notificar a otros peers que nos desconectamos"""
-        other_peers = [peer for peer in self.peers_in_room 
-                      if peer[:2] != self.self_addr[:2]]
-        
-        print(f"Notificando desconexión a {len(other_peers)} peers: {other_peers}")
+# auxiliar functions
+    def signal_handler(self, sig, frame):
+        try:
+            other_peers = [peer for peer in self.peers_in_room 
+                        if peer[:2] != self.self_addr[:2]]
+            for peer in other_peers:
+                message = Olaf.encode_msg(PING, self.self_addr, [], 'bye')
+                self.sock.sendto(message, (peer[0],peer[1]))
+        except:
+            pass
+        print('desconectado')
+        self.sock.close()
+        sys.exit(0)
+
+    def send_ping(self, other_peers):
         for peer in other_peers:
-            message = Olaf.encode_msg(PING, self.self_addr, [], "bye")
-            self.sock.sendto(message, (peer[0], peer[1]))
-            print(f"Enviado 'bye' a {peer}")
+            message = Olaf.encode_msg(PING, self.self_addr, self.peers_in_room, '')
+            self.sock.sendto(message, (peer[0],peer[1]))
+
+    def entry_validator(self, room):
+        min_id = min(peer[2] for peer in self.peers_in_room)
+
+        if self.self_addr[2] == min_id:
+            message = Olaf.encode_msg(ENTRY_PEER, self.self_addr, [], room)
+            self.sock.sendto(message, tuple(self.bootstraps[0]))
+
+    def join_bootstrap(self, room):
+        message = Olaf.encode_msg(JOIN_B, [], [], room)
+        self.sock.sendto(message, tuple(self.bootstraps[0]))

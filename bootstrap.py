@@ -2,6 +2,8 @@ import socket
 from turtle import pu
 from olaf import Olaf
 from config import *
+import signal
+import sys
 # luego estara en otro archivo
 
 
@@ -20,9 +22,15 @@ class Bootstrap:
         self.sock = create_udp_socket(ip, port)
 
     # ------ METHODS ----- #
+    def signal_handler(self, sig, frame):
+        self.sock.close()
+        sys.exit(0)
+        
     def start(self):
         ''' Metodo que maneja los join peers que quieren conectarse a una sala'''
         # hilo para manejar mensajes de protocolo
+        signal.signal(signal.SIGINT, self.signal_handler)
+        
         while True:
             try:
                 # extraer mensajes de la cola
