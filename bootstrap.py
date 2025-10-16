@@ -2,6 +2,8 @@ import socket
 from turtle import pu
 from olaf import Olaf
 from config import *
+import signal
+import sys
 # luego estara en otro archivo
 
 
@@ -14,15 +16,21 @@ def create_udp_socket(ip, port):
 class Bootstrap:
     def __init__(self, timeout=5, room_size=10, ip='', port=0):
     # --- PARA CUANDO ACTÚA COMO HOST ---
-        self.room_list = {}  # {"gaming": ["192.168.1.100:5000",1], "chat": ["1.2.3.4:7000",2]}
-        self.timeout = timeout # no se usa aun
+        self.room_list = {}  # {room_name: {"entry": [ip, port, id], "next_id": int, last_ping: time}, ...}
+        self.timeout = timeout
         self.room_size = room_size
         self.sock = create_udp_socket(ip, port)
 
     # ------ METHODS ----- #
+    def signal_handler(self, sig, frame):
+        self.sock.close()
+        sys.exit(0)
+        
     def start(self):
         ''' Metodo que maneja los join peers que quieren conectarse a una sala'''
         # hilo para manejar mensajes de protocolo
+        signal.signal(signal.SIGINT, self.signal_handler)
+        
         while True:
             try:
                 # extraer mensajes de la cola
@@ -32,9 +40,8 @@ class Bootstrap:
 
                 # peer data
                 msg_type, self_addr, peers, payload = message
-                payload = payload.decode('utf-8')
 
-                print(message, publi_addr)
+                print('mensaje del peer',message, publi_addr)
                 # msg[0]=comand, msg[1]=self_peer, msg[2]=peers_in_room, msg[3]=pyload
 
                 if msg_type == JOIN_B:
@@ -50,7 +57,9 @@ class Bootstrap:
                             # Primera vez: este peer es el entry (ID 1)
                             ip_port_id = [publi_addr[0], publi_addr[1], 1]
                             self.room_list[payload] = {"entry": ip_port_id, "next_id": 2}
+                            print(f"Enviando BOOTSTRAP_R con self_addr: {ip_port_id}")
                             message_data = Olaf.encode_msg(BOOTSTRAP_R, ip_port_id, [ip_port_id], payload)
+                            print(f"Mensaje codificado: {message_data}")
                             self.sock.sendto(message_data, (publi_addr[0], publi_addr[1]))
                             print(f"Nueva sala '{payload}' creada por {publi_addr} (ID 1)")
 
@@ -65,7 +74,9 @@ class Bootstrap:
                         # Crear dirección del nuevo peer
                         publi_addr_id = [publi_addr[0], publi_addr[1], new_id]
                         
+                        print(f"Enviando BOOTSTRAP_R con self_addr: {publi_addr_id}")
                         message_data = Olaf.encode_msg(BOOTSTRAP_R, publi_addr_id, [entry_peer], payload)
+                        print(f"Mensaje codificado: {message_data}")
                         self.sock.sendto(message_data, (publi_addr[0], publi_addr[1]))
 
                 elif msg_type == ENTRY_PEER:
