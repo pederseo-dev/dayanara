@@ -40,7 +40,6 @@ class Bootstrap:
 
                 # peer data
                 msg_type, self_addr, peers, payload = message
-                payload = payload.decode('utf-8')
 
                 print('mensaje del peer',message, publi_addr)
                 # msg[0]=comand, msg[1]=self_peer, msg[2]=peers_in_room, msg[3]=pyload

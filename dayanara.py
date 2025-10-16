@@ -63,7 +63,7 @@ class Dayanara:
             if self.state["peers_in_room"]: self.send_ping()
 
             # 2. Si no hay otros peers pero hay peers_in_room (solo yo), validar entry UNA VEZ
-            if self.state["entry_peer"]: self.send_entry_ping()
+            if self.state["entry_peer"]: self.send_entry_ping(room)
 
             # 3. Si no hay nadie y no me he unido, intentar JOIN_B
             if self.state["joined"] == False: self.send_join_bootstrap(room)
@@ -156,11 +156,10 @@ class Dayanara:
                 message = Olaf.encode_msg(PING, self.self_addr, [peer], '')
                 self.sock.sendto(message, (peer[0],peer[1]))
 
-    def send_entry_ping(self):
-        message = Olaf.encode_msg(ENTRY_PEER, self.self_addr, [], '')
+    def send_entry_ping(self, room):
+        message = Olaf.encode_msg(ENTRY_PEER, self.self_addr, [], room)
         self.sock.sendto(message, tuple(self.bootstraps[0]))
   
     def send_join_bootstrap(self, room):
         message = Olaf.encode_msg(JOIN_B, [], [], room)
         self.sock.sendto(message, tuple(self.bootstraps[0]))
-
