@@ -1,4 +1,4 @@
-from dayanara import Dayanara
+from architecture.dayanara import Dayanara
 import threading
 import time
 
