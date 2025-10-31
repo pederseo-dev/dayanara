@@ -24,7 +24,7 @@ class Dayanara(Core):
 
     def send(self, data):
         if not data: print('Data is required')
-        self.send_to_all(payload=data)
+        self.send_to_all(payload=data, type=3)
 
     def receive(self):
         data, address = self.receive_data()
