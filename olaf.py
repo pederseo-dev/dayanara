@@ -4,17 +4,17 @@ import socket
 class Olaf:
     """
     Protocolo Olaf (orden de bytes):
-    [type (1B)] [self_addr (IPv4 4B + port 2B + id 2B)] [peers (num_peers 2B + N*peer)] [payload (len 4B + data)]
-    peer = [IPv4 (4B) + port (2B) + id (2B)]
+    [type (1B)] [peers (num_peers 2B + N*peer)] [payload (len 4B + data)]
+    peer = [IPv4 (4B) + port (2B) + id (4B)]
 
     Convención de direcciones en esta API: listas
-    - self_addr: [ip:str, port:int, id:int]
     - peers_addr: [[ip:str, port:int, id:int], ...]
     """
+#--------------------------------------pack------------------------------------------------
     @staticmethod
     def pack_addr(addr) -> bytes:
         ip, port, peer_id = addr or ['0.0.0.0', 0, 0]
-        return struct.pack("!4sHH", socket.inet_aton(ip), int(port), int(peer_id))  # 8B
+        return struct.pack("!4sHI", socket.inet_aton(ip), int(port), int(peer_id))  # 8B
 
     @staticmethod
     def pack_peers(peers_addr) -> bytes:
@@ -28,11 +28,12 @@ class Olaf:
             payload = payload.encode("utf-8")
         return struct.pack("!I", len(payload)) + payload  # [len][data]
 
+#--------------------------------------unpack------------------------------------------------
     @staticmethod
     def unpack_addr(data: bytes, offset: int):
         ip = socket.inet_ntoa(data[offset:offset+4])
         port = struct.unpack_from("!H", data, offset+4)[0]
-        peer_id = struct.unpack_from("!H", data, offset+6)[0]
+        peer_id = struct.unpack_from("!I", data, offset+6)[0]
         return [ip, port, peer_id], offset + 8
 
     @staticmethod
@@ -52,55 +53,37 @@ class Olaf:
         payload = data[offset:offset+payload_len]
         return payload, offset + payload_len
 
+#--------------------------------------encode------------------------------------------------
     @staticmethod
-    def encode_msg(msg_type: int, self_addr: list, peers_addr: list, payload: bytes | str = b"") -> bytes:
+    def encode_msg(msg_type: int, peers_addr: list, payload: bytes | str = b"") -> bytes:
         """
         Inputs:
         - msg_type: int
-        - self_addr: ["127.0.0.1", 12345, 1]
-        - peers_addr: [["127.0.0.1", 12346, 2], ["127.0.0.2", 12347, 3]]
+        - peers_addr: [["127.0.0.1", 12346, 1234567890], ["127.0.0.2", 12347, 1234567891]]
         - payload: bytes o str (si es str se codifica utf-8)
         """
-        # [type][self_addr][peers][payload]
+        # [type][peers][payload]
         type_block = struct.pack("!B", int(msg_type))                   # [type] (1B)
-        self_block = Olaf.pack_addr(self_addr)                          # [self_addr] (6B)
-        peers_block = Olaf.pack_peers(peers_addr)                       # [peers] ([2B]+N*6B)
+        peers_block = Olaf.pack_peers(peers_addr)                       # [peers] ([2B]+N*8B)
         payload_block = Olaf.pack_payload(payload)                      # [payload] ([4B]+M)
-        return type_block + self_block + peers_block + payload_block
+        return type_block + peers_block + payload_block
 
+#--------------------------------------decode------------------------------------------------
     @staticmethod
     def decode_msg(data: bytes):
         """
         Output (listas):
         - msg_type: int
-        - self_addr: ["127.0.0.1", 12345, 1]
-        - peers: [["127.0.0.1", 12346, 2], ["127.0.0.2", 12347, 3]]
+        - peers: [["127.0.0.1", 12346, 1234567890], ["127.0.0.2", 12347, 1234567891]]
         - payload: bytes
         """
         msg_type = struct.unpack_from("!B", data, 0)[0]
-        self_addr, offset = Olaf.unpack_addr(data, 1)
+        offset = 1  # Después del byte de tipo
         peers, offset = Olaf.unpack_peers(data, offset)
         payload, offset = Olaf.unpack_payload(data, offset)
-        return msg_type, self_addr, peers, payload
+        return msg_type, peers, payload
 
-# # ---- test Olaf ----
-# msg = Olaf.encode_msg(
-#     msg_type=1,
-#     self_addr=[],
-#     peers_addr=[],
-#     payload="hola mundo"
-# )
-
-# print("Binario crudo:", msg)
-# print("Hexadecimal :", msg.hex(" "))
-# print("Longitud    :", len(msg))
-
-# # Probar decode
-# decoded = Olaf.decode_msg(msg)
-# print("\nDecodificado:", decoded)
-
-
-
-
-
-
+#--------------------------------------decode payload-----------------------------------------
+    @staticmethod
+    def decode_payload(payload: bytes):
+        return payload.decode("utf-8")
