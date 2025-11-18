@@ -45,6 +45,8 @@ class Network(State):
     def get_other_peers(self) -> list:
         ''' get the list of other peers in the room'''
         with self._lock:
+            if self.self_addr is None:
+                return []
             return [peer for peer in self.peers_in_room if peer[:2] != self.self_addr[:2]]
 
     def min_id(self) -> bool:
@@ -72,7 +74,11 @@ class Network(State):
 
     def evaluate_state(self) -> None:
         with self._lock:
-            others = self.get_other_peers()
+            # Calcular others directamente sin llamar a get_other_peers() para evitar deadlock
+            if self.self_addr is None:
+                others = []
+            else:
+                others = [peer for peer in self.peers_in_room if peer[:2] != self.self_addr[:2]]
             has_others = len(others) > 0  # ✅ Criterio correcto
             
             # Si hay OTROS peers (no solo yo)
@@ -82,7 +88,14 @@ class Network(State):
                 self.send_join = False
                 
                 # Solo si soy el peer con menor ID, enviar COLLECTOR al bootstrap
-                if self.min_id():
+                # Calcular min_id directamente sin llamar al método para evitar deadlock
+                if not self.peers_in_room or self.self_addr is None:
+                    is_min_id = False
+                else:
+                    min_id = min(peer[2] for peer in self.peers_in_room)
+                    is_min_id = self.self_addr[2] == min_id
+                
+                if is_min_id:
                     self.send_collector = True
                 else:
                     self.send_collector = False

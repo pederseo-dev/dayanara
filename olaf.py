@@ -82,8 +82,3 @@ class Olaf:
         peers, offset = Olaf.unpack_peers(data, offset)
         payload, offset = Olaf.unpack_payload(data, offset)
         return msg_type, peers, payload
-
-#--------------------------------------decode payload-----------------------------------------
-    @staticmethod
-    def decode_payload(payload: bytes):
-        return payload.decode("utf-8")

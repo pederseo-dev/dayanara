@@ -8,12 +8,16 @@ class Dayanara(Core):
         super().__init__(bootstraps)
 
     def join(self, room):
+        print(f"[DEBUG Dayanara.join] Iniciando join para room: {room}")
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
+        print(f"[DEBUG Dayanara.join] Iniciando thread connect()")
         threading.Thread(target=self.connect, daemon=True).start()
 
+        print(f"[DEBUG Dayanara.join] Iniciando thread heart()")
         threading.Thread(target=self.heart, args=(room,), daemon=True).start()
+        print(f"[DEBUG Dayanara.join] Threads iniciados")
 
     def send(self, data):
         self.app_send(data)
