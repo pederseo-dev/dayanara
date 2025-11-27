@@ -1,11 +1,12 @@
 import struct
 import socket
+from msg_types import *
 
 class Olaf:
     """
     Protocolo Olaf (orden de bytes):
     [type (1B)] [peers (num_peers 2B + N*peer)] [payload (len 4B + data)]
-    peer = [IPv4 (4B) + port (2B) + id (4B)]
+    peer = [IPv4 (4B) + port (2B) + id (4B)] = 10 bytes total
 
     Convención de direcciones en esta API: listas
     - peers_addr: [[ip:str, port:int, id:int], ...]
@@ -14,7 +15,7 @@ class Olaf:
     @staticmethod
     def pack_addr(addr) -> bytes:
         ip, port, peer_id = addr or ['0.0.0.0', 0, 0]
-        return struct.pack("!4sHI", socket.inet_aton(ip), int(port), int(peer_id))  # 8B
+        return struct.pack("!4sHI", socket.inet_aton(ip), int(port), int(peer_id))  # 10B
 
     @staticmethod
     def pack_peers(peers_addr) -> bytes:
@@ -34,7 +35,7 @@ class Olaf:
         ip = socket.inet_ntoa(data[offset:offset+4])
         port = struct.unpack_from("!H", data, offset+4)[0]
         peer_id = struct.unpack_from("!I", data, offset+6)[0]
-        return [ip, port, peer_id], offset + 8
+        return [ip, port, peer_id], offset + 10
 
     @staticmethod
     def unpack_peers(data: bytes, offset: int):
@@ -63,9 +64,14 @@ class Olaf:
         - payload: bytes o str (si es str se codifica utf-8)
         """
         # [type][peers][payload]
+        if msg_type == BOOTSTRAP_R:
+            payload = Olaf.pack_addr(payload)
+        else:
+            payload = Olaf.pack_payload(payload)
+            
         type_block = struct.pack("!B", int(msg_type))                   # [type] (1B)
         peers_block = Olaf.pack_peers(peers_addr)                       # [peers] ([2B]+N*8B)
-        payload_block = Olaf.pack_payload(payload)                      # [payload] ([4B]+M)
+        payload_block = payload                                         # payload ya está empaquetado
         return type_block + peers_block + payload_block
 
 #--------------------------------------decode------------------------------------------------
@@ -80,5 +86,10 @@ class Olaf:
         msg_type = struct.unpack_from("!B", data, 0)[0]
         offset = 1  # Después del byte de tipo
         peers, offset = Olaf.unpack_peers(data, offset)
-        payload, offset = Olaf.unpack_payload(data, offset)
-        return msg_type, peers, payload
+        if msg_type == BOOTSTRAP_R:
+            payload, offset = Olaf.unpack_addr(data, offset)
+            return msg_type, peers, payload
+        else:
+            payload, offset = Olaf.unpack_payload(data, offset)
+            return msg_type, peers, payload
+
