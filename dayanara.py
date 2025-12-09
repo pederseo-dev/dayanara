@@ -28,3 +28,7 @@ class Dayanara(Core):
 
     def receive(self):
         return self.app_receive()
+    
+d = Dayanara()
+
+d.join('sala1')
