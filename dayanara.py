@@ -15,10 +15,20 @@ class Dayanara(Core):
 
         threading.Thread(target=self.heart, args=(room,), daemon=True).start()
 
+                # Mantener el programa vivo(provisorio)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("Cerrando...")
+
 
     def send(self, data):
         self.app_send(data)
 
     def receive(self):
         return self.app_receive()
+    
+d = Dayanara()
 
+d.join('sala1')
