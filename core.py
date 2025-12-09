@@ -11,11 +11,11 @@ class Core:
     def __init__(self, bootstraps=[['127.0.0.1', 5000], ['127.0.0.1', 5001]]):
         self.bootstraps = bootstraps
         self.app_queue = queue.Queue()
+        self.network_queue = queue.Queue()
         self.network = Network(bootstraps=bootstraps)
         self.binary = Olaf()        
         self.peer = Peer()
         self.b_count = 0
-
 
     def connect(self):
         """Thread que recibe mensajes"""
