@@ -1,2 +1,5 @@
 hyperswarm/
 __pycache__
+dist
+src/dayanara.egg-info
+.venv

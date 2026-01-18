@@ -1,5 +1,5 @@
 import socket
-from olaf import Olaf
+from .olaf import Olaf
 
 class Peer:
     def __init__(self, ip='0.0.0.0', port=0):

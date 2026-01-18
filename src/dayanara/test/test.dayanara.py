@@ -10,7 +10,7 @@ username = input("Nombre: ")
 room = input("Sala: ")
 
 # Instanciar
-d = Dayanara(bootstraps=[["104.248.67.112", 12345]])
+d = Dayanara()
 
 # Join async (NO bloquea)
 d.join(room)
@@ -22,6 +22,7 @@ def recibir():
         if msg:
             print(f"\r{msg}")
             print(f"{username}: ", end='', flush=True)
+            print(d.conn_peers())
 
 threading.Thread(target=recibir, daemon=True).start()
 
@@ -34,3 +35,4 @@ try:
 except KeyboardInterrupt:
     print("\nCerrando...")
     sys.exit(0)
+

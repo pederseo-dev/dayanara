@@ -1,6 +1,6 @@
 import struct
 import socket
-from msg_types import *
+from .msg_types import *
 
 class Olaf:
     """

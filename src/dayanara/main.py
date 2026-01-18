@@ -1,4 +1,4 @@
-from core import Core
+from .core import Core
 import signal
 import threading
 import time
@@ -27,3 +27,6 @@ class Dayanara(Core):
 
     def receive(self):
         return self.app_receive()
+    
+    def peers_list(self):
+        return self.network.get_peers_list()

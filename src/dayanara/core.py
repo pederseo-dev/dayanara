@@ -1,7 +1,7 @@
-from peer import Peer
-from olaf import Olaf
-from network import Network
-from msg_types import *
+from .peer import Peer
+from .olaf import Olaf
+from .network import Network
+from .msg_types import *
 import queue
 import time
 import sys
@@ -150,3 +150,5 @@ class Core:
 
     def room_full(self, message, addr):
         if self.debug: print(message)
+
+
