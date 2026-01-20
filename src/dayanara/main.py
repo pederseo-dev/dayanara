@@ -4,7 +4,7 @@ import threading
 import time
 
 class Dayanara(Core):
-    def __init__(self, bootstraps=[['127.0.0.1', 5000], ['127.0.0.1', 5001]], debug=False):
+    def __init__(self, bootstraps=[['104.248.67.112',12345]], debug=False):
         super().__init__(bootstraps, debug)
 
     def join(self, room):

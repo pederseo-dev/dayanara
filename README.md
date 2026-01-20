@@ -10,9 +10,42 @@ peers to discover each other using bootstrap servers and communicate inside room
 pip install dayanara
 ````
 
-## Basic usage
+## P2P chat example
 
 ```python
+# Peer A
+import threading
+import sys
+from dayanara import Dayanara
+
+
+room = input("room name: ")
+
+d = Dayanara()
+
+d.join(room)
+
+# receive loop
+def receiv_msg():
+    while True:
+        msg = d.receive()
+        if msg:
+            print(msg)
+
+threading.Thread(target=receiv_msg, daemon=True).start()
+
+# send loop
+try:
+    while True:
+        message = input('message:')
+        if message:
+            d.send(message)
+except KeyboardInterrupt:
+    sys.exit(0)
+```
+
+```python
+# Peer B
 from dayanara import Dayanara
 
 d = Dayanara()
